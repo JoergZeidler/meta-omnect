@@ -1,0 +1,7 @@
+pipeline:
+    outputs:
+        - name: loki
+          match: '*'
+          host: 192.168.178.21
+          port: 3100
+          labels: job=fluentbit, hostname=${HOSTNAME}, component=$TAG
