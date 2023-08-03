@@ -1,0 +1,22 @@
+From 2164b0278c52cc4da2561e75cb63ecc69f952f0d Mon Sep 17 00:00:00 2001
+From: Kas User <kas@example.com>
+Date: Wed, 2 Aug 2023 15:10:39 +0000
+Subject: [PATCH] use yaml config file
+
+---
+ init/systemd.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/init/systemd.in b/init/systemd.in
+index 8838bc5ce..6707361f0 100644
+--- a/init/systemd.in
++++ b/init/systemd.in
+@@ -8,7 +8,7 @@ After=network.target
+ Type=simple
+ EnvironmentFile=-/etc/sysconfig/@FLB_OUT_NAME@
+ EnvironmentFile=-/etc/default/@FLB_OUT_NAME@
+-ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/@FLB_OUT_NAME@ -c /@CMAKE_INSTALL_SYSCONFDIR@/@FLB_OUT_NAME@/@FLB_OUT_NAME@.conf
++ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/@FLB_OUT_NAME@ -c /@CMAKE_INSTALL_SYSCONFDIR@/@FLB_OUT_NAME@/@FLB_OUT_NAME@.yaml
+ Restart=always
+ 
+ [Install]
