@@ -21,6 +21,5 @@ pipeline:
           buffer_Max_Size: 6M
 
         - name: systemd
-          systemd_filter: _SYSTEMD_UNIT=deviceupdate-agent.service
-          systemd_filter: _SYSTEMD_UNIT=omnect-device-service.service
+          systemd_filter: _SYSTEMD_UNIT=deviceupdate-agent.service omnect-device-service.service
           tag: service.*

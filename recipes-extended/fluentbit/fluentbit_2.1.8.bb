@@ -17,10 +17,10 @@ SECTION = "net"
 
 SRCREV = "1d83649441e9e9fdbb5ba83bffca11ac4ac7b83c"
 SRC_URI = "git://github.com/fluent/fluent-bit.git;protocol=https;nobranch=1 \
-           file://0001-use-yaml-config-file.patch \
            file://fluent-bit.yaml \
            file://output-stdout.yaml \
            file://output-loki.yaml \
+           file://0001-enable-hotreload-and-use-yaml-conf-file.patch \
            "
 
 S = "${WORKDIR}/git"
@@ -55,7 +55,7 @@ TARGET_CC_ARCH += "${SELECTED_OPTIMIZATION}"
 
 
 do_install:append () {
-    install -m 0770 -D ${WORKDIR}/fluent-bit.yaml ${D}${sysconfdir}/fluent-bit/fluent-bit.yaml
+    install -m 0777 -D ${WORKDIR}/fluent-bit.yaml ${D}${sysconfdir}/fluent-bit/fluent-bit.yaml
     install -m 0770 -D ${WORKDIR}/output-stdout.yaml ${D}${sysconfdir}/fluent-bit/output-stdout.yaml
     install -m 0770 -D ${WORKDIR}/output-loki.yaml ${D}${sysconfdir}/fluent-bit/output-loki.yaml
 }
