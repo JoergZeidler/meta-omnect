@@ -46,7 +46,7 @@ index 6fc707c..11d4e4b 100644
 +}
 \ No newline at end of file
 diff --git a/src/adu_workflow/src/agent_workflow.c b/src/adu_workflow/src/agent_workflow.c
-index 3eb5fa4..7e6e3ab 100644
+index 3eb5fa4..728fd22 100644
 --- a/src/adu_workflow/src/agent_workflow.c
 +++ b/src/adu_workflow/src/agent_workflow.c
 @@ -35,6 +35,10 @@
@@ -60,7 +60,23 @@ index 3eb5fa4..7e6e3ab 100644
  // fwd decl
  void ADUC_Workflow_WorkCompletionCallback(const void* workCompletionToken, ADUC_Result result, bool isAsync);
  
-@@ -340,6 +344,45 @@ void ADUC_Workflow_DoWork(ADUC_WorkflowData* workflowData)
+@@ -243,6 +247,15 @@ typedef struct tagADUC_WorkflowHandlerMapEntry
+  *     AutoTransitionApplicableUpdateAction is equal to the current update action of the workflow data.
+  */
+ const ADUC_WorkflowHandlerMapEntry workflowHandlerMap[] = {
++    { ADUCITF_WorkflowStep_ProcessDeployment,
++        /* calls operation */                               ADUC_Workflow_MethodCall_ProcessDeployment,
++        /* and on completion calls */                       ADUC_Workflow_MethodCall_ProcessDeployment_Complete,
++        /* on success, transitions to state */              ADUCITF_State_DeploymentInProgress,
++        /* on success auto-transitions to workflow step */  ADUCITF_WorkflowStep_Download,
++        /* on failure, transitions to state */              ADUCITF_State_Failed,
++        /* on failure auto-transitions to workflow step */  ADUCITF_WorkflowStep_Undefined,
++    },
++
+     { ADUCITF_WorkflowStep_Download,
+         /* calls operation */                               ADUC_Workflow_MethodCall_Download,
+         /* and on completion calls */                       ADUC_Workflow_MethodCall_Download_Complete,
+@@ -340,6 +353,45 @@ void ADUC_Workflow_DoWork(ADUC_WorkflowData* workflowData)
  
  void ADUC_Workflow_HandleStartupWorkflowData(ADUC_WorkflowData* currentWorkflowData)
  {
@@ -106,7 +122,7 @@ index 3eb5fa4..7e6e3ab 100644
      if (currentWorkflowData == NULL)
      {
          Log_Info("No update content. Ignoring.");
-@@ -538,11 +581,17 @@ void ADUC_Workflow_HandlePropertyUpdate(
+@@ -538,11 +590,17 @@ void ADUC_Workflow_HandlePropertyUpdate(
  
                      Log_Debug("deferral not needed. Processing '%s' now", workflow_peek_id(nextWorkflow));
  
@@ -128,25 +144,7 @@ index 3eb5fa4..7e6e3ab 100644
                  }
  
                  // Fall through to handle new workflow
-@@ -672,7 +721,17 @@ void ADUC_Workflow_HandleUpdateAction(ADUC_WorkflowData* workflowData)
-     if (workflow_isequal_id(workflowData->WorkflowHandle, workflowData->LastCompletedWorkflowId)
-         && !workflow_get_force_update(workflowData->WorkflowHandle))
-     {
-+        char* updateId = workflow_get_expected_update_id_string(workflowData->WorkflowHandle);
-         Log_Debug("Ignoring duplicate deployment %s, action %d", workflowData->LastCompletedWorkflowId, desiredAction);
-+
-+        // Use Case:
-+        // An update was successfully installed on the device. The update itself is already present and active.
-+        // In case token expiry connection refresh handling (after about 40 minutes), the device agent will automatically change the operation state
-+        // in the module twin to state "6" -> "in Progress" in the background.
-+        // Via this ignore duplicate handling, this state won't change later by the agent and we have to manually set the state
-+        // back to idle.
-+        ADUC_Workflow_SetInstalledUpdateIdAndGoToIdle(workflowData, updateId);
-+        free(updateId);
-         goto done;
-     }
- 
-@@ -971,7 +1030,6 @@ void ADUC_Workflow_WorkCompletionCallback(const void* workCompletionToken, ADUC_
+@@ -971,7 +1029,6 @@ void ADUC_Workflow_WorkCompletionCallback(const void* workCompletionToken, ADUC_
                      // Reset workflow state to process deployment and transfer
                      // the deferred workflow to current.
                      workflow_update_for_replacement(workflowData->WorkflowHandle);
@@ -154,6 +152,52 @@ index 3eb5fa4..7e6e3ab 100644
                  }
                  else
                  {
+@@ -1327,6 +1384,27 @@ void ADUC_Workflow_MethodCall_Idle(ADUC_WorkflowData* workflowData)
+     workflowData->WorkflowHandle = NULL;
+ }
+ 
++/**
++ * @brief Called to do ProcessDeployment.
++ *
++ * @param[in,out] methodCallData The metedata for the method call.
++ * @return Result code.
++ */
++ADUC_Result ADUC_Workflow_MethodCall_ProcessDeployment(ADUC_MethodCall_Data* methodCallData)
++{
++    UNREFERENCED_PARAMETER(methodCallData);
++    Log_Info("Workflow step: ProcessDeployment");
++
++    ADUC_Result result = { ADUC_Result_Success };
++    return result;
++}
++
++void ADUC_Workflow_MethodCall_ProcessDeployment_Complete(ADUC_MethodCall_Data* methodCallData, ADUC_Result result)
++{
++    UNREFERENCED_PARAMETER(methodCallData);
++    UNREFERENCED_PARAMETER(result);
++}
++
+ /**
+  * @brief Called to do download.
+  *
+diff --git a/src/agent/adu_core_interface/src/adu_core_interface.c b/src/agent/adu_core_interface/src/adu_core_interface.c
+index 8e2bec5..c715753 100644
+--- a/src/agent/adu_core_interface/src/adu_core_interface.c
++++ b/src/agent/adu_core_interface/src/adu_core_interface.c
+@@ -445,13 +445,6 @@ void OrchestratorUpdateCallback(
+     {
+         Log_Debug("Processing deployment %s ...", workflowId);
+ 
+-        ADUC_Result inProgressResult = { .ResultCode = ADUC_GeneralResult_Success, .ExtendedResultCode = 0 };
+-        if (!ReportPreDeploymentProcessingState(
+-                propertyValue, ADUCITF_State_DeploymentInProgress, workflowData, inProgressResult))
+-        {
+-            Log_Warn("Reporting InProgress failed. Continuing processing deployment %s", workflowId);
+-        }
+-
+         // Ensure update to latest rootkey pkg, which is required for validating the update metadata.
+         workFolder = workflow_get_root_sandbox_dir(workflowData->WorkflowHandle);
+         if (workFolder == NULL)
 diff --git a/src/agent/src/main.c b/src/agent/src/main.c
 index 934066c..0a2ac43 100644
 --- a/src/agent/src/main.c
